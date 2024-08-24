@@ -19,6 +19,16 @@ class FocusLLM(nn.Module):
         self.new_output = nn.Linear(self.hidden_size, self.hidden_size)
 
     def forward(self, input_ids, attention_mask=None):
+        """
+        Forward pass of the FocusLLM model.
+
+        Args:
+            input_ids (torch.Tensor): Input token IDs.
+            attention_mask (torch.Tensor, optional): Attention mask. Defaults to None.
+
+        Returns:
+            torch.Tensor: Model output.
+        """
         # Split input into chunks
         chunk_size = input_ids.size(1) // self.num_chunks
         chunks = input_ids.split(chunk_size, dim=1)
@@ -48,6 +58,17 @@ class FocusLLM(nn.Module):
         return output
 
     def train_step(self, input_ids, labels, chunk_size):
+        """
+        Perform a single training step.
+
+        Args:
+            input_ids (torch.Tensor): Input token IDs.
+            labels (torch.Tensor): Labels.
+            chunk_size (int): Size of each chunk.
+
+        Returns:
+            torch.Tensor: Total loss.
+        """
         # Implement both Continuation and Repetition losses
         continuation_loss = self.continuation_loss(input_ids, labels)
         repetition_loss = self.repetition_loss(input_ids, labels, chunk_size)
@@ -55,11 +76,32 @@ class FocusLLM(nn.Module):
         return total_loss
 
     def continuation_loss(self, input_ids, labels):
+        """
+        Calculate the continuation loss.
+
+        Args:
+            input_ids (torch.Tensor): Input token IDs.
+            labels (torch.Tensor): Labels.
+
+        Returns:
+            torch.Tensor: Continuation loss.
+        """
         outputs = self(input_ids)
         loss = F.cross_entropy(outputs.view(-1, outputs.size(-1)), labels.view(-1), ignore_index=-100)
         return loss
 
     def repetition_loss(self, input_ids, labels, chunk_size):
+        """
+        Calculate the repetition loss.
+
+        Args:
+            input_ids (torch.Tensor): Input token IDs.
+            labels (torch.Tensor): Labels.
+            chunk_size (int): Size of each chunk.
+
+        Returns:
+            torch.Tensor: Repetition loss.
+        """
         # Randomly select a chunk to repeat
         start_idx = torch.randint(0, input_ids.size(1) - chunk_size, (1,))
         chunk = input_ids[:, start_idx:start_idx + chunk_size]
@@ -70,10 +112,20 @@ class FocusLLM(nn.Module):
         return loss
 
 def train_focusllm(model, train_dataloader, num_epochs, learning_rate):
+    """
+    Train the FocusLLM model.
+
+    Args:
+        model (FocusLLM): The model to train.
+        train_dataloader (DataLoader): DataLoader for training data.
+        num_epochs (int): Number of epochs to train.
+        learning_rate (float): Learning rate.
+    """
     optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
 
     for epoch in range(num_epochs):
         model.train()
+        epoch_loss = 0
         for batch in train_dataloader:
             input_ids = batch['input_ids']
             labels = batch['labels']
@@ -84,4 +136,17 @@ def train_focusllm(model, train_dataloader, num_epochs, learning_rate):
             loss.backward()
             optimizer.step()
 
-        print(f"Epoch {epoch+1}/{num_epochs}, Loss: {loss.item()}")
+            epoch_loss += loss.item()
+
+        avg_epoch_loss = epoch_loss / len(train_dataloader)
+        print(f"Epoch {epoch+1}/{num_epochs}, Loss: {avg_epoch_loss:.4f}")
+
+# Example usage
+if __name__ == "__main__":
+    base_model_name = "your-base-model-name"
+    model = FocusLLM(base_model_name)
+    train_dataloader = ...  # Define your DataLoader here
+    num_epochs = 3
+    learning_rate = 5e-5
+
+    train_focusllm(model, train_dataloader, num_epochs, learning_rate)
